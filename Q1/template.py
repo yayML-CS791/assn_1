@@ -40,7 +40,8 @@ class Inference:
         self.state_factor_potentials = data['State_Factor_Potentials']
         self.state_factor_potentials_sum = [sum(self.state_factor_potentials[i:i+self.states_count]) for i in range(0, len(self.state_factor_potentials), self.states_count)]
         self.state_factor_potentials = [potential/self.state_factor_potentials_sum[i//self.states_count] for i, potential in enumerate(self.state_factor_potentials)]
-
+        self.k = data['K']
+        
     def triangulate_and_get_cliques(self):
         """
         Triangulate the undirected graph and extract the maximal cliques.
