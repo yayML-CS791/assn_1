@@ -1,5 +1,7 @@
 import json
 
+import comm
+
 ########################################################################
 
 # Do not install any external packages. You can only use Python's default libraries such as:
@@ -13,6 +15,9 @@ class JunctionChain:
 
     def add_clique(self, clique):
         self.cliques.append(clique)
+
+    def __str__(self):
+        return 'Junction Chain with cliques: ' + '\n' + '\n'.join([str(clique) for clique in self.cliques])
 
 class Clique:
     def __init__(self, num_nodes, num_states, vars=None):
@@ -30,6 +35,14 @@ class Clique:
             index += val * (self.num_nodes ** (len(assignment) - i - 1))
         return self.potential[index]
     
+    def get_potential_from_dict(self, assignment_dict):
+        index = 0
+        # print(assignment_dict, self.vars)
+        for i in range(len(self.vars)):
+            index += assignment_dict[self.vars[i]] * (self.num_states ** (len(self.vars) - i - 1))
+        # print(index)
+        return self.potential[index]
+    
     def set_potential_from_assignment(self, assignment, value):
         index = 0
         for i, val in enumerate(assignment):
@@ -44,12 +57,16 @@ class Clique:
 
     def get_index_of_var(self, var):
         return self.index_map[var]
+    
+    def __str__(self):
+        return 'Clique with vars: ' + str(self.vars) + ' and potential: ' + str(self.potential)
 
 class Message:
-    def __init__(self, vars, potential):
+    def __init__(self, vars, potential, states_count=2):
         self.vars = vars
         self.potential = potential
         self.index_map = dict()
+        self.states_count = states_count
         for i in range(len(vars)):
             self.index_map[vars[i]] = i
 
@@ -59,8 +76,26 @@ class Message:
             index += val * (self.num_nodes ** (len(assignment) - i - 1))
         return self.potential[index]
     
+    def get_potential_from_dict(self, assignment_dict):
+        index = 0
+        for i in range(len(self.vars)):
+            index += assignment_dict[self.vars[i]] * (self.states_count ** (len(self.vars) - i - 1))
+        return self.potential[index]
+    
     def get_index_of_var(self, var):
         return self.index_map[var]
+    
+    def set_potential(self, potential):
+        self.potential = potential
+
+    def set_potential_from_assignment(self, assignment, value):
+        index = 0
+        for i, val in enumerate(assignment):
+            index += val * (self.num_nodes ** (len(assignment) - i - 1))
+        self.potential[index] = value
+
+    def set_potential_from_index(self, index, value):
+        self.potential[index] = value
 
 class Inference:
     def __init__(self, data):
@@ -103,6 +138,9 @@ class Inference:
         # print('K: ', self.k)
         # self.triangulate_and_get_cliques()
         self.get_junction_tree()
+        # print(self.junction_chain)
+        # for clique in self.junction_chain.cliques:
+        #     print(clique)
         
         
     def triangulate_and_get_cliques(self):
@@ -117,7 +155,7 @@ class Inference:
 
         Refer to the problem statement for details on triangulation and clique extraction.
         """
-        pass        
+        pass
 
     def get_junction_tree(self):
         """
@@ -131,25 +169,37 @@ class Inference:
 
         Refer to the problem statement for details on junction tree construction.
         """
-        print('No of observations: ', self.num_observations)
+        # print('No of observations: ', self.num_observations)
         for i in range(self.num_observations):
-            vars = list(range(i*self.factors_count, i*self.factors_count + self.factors_count))
+            # vars = list(range(i*self.factors_count, i*self.factors_count + self.factors_count))
             clique = Clique(self.factors_count + 1, \
                             self.states_count, \
                             vars=list(range(i*self.factors_count, i*self.factors_count + self.factors_count)) + \
                                 [self.num_observations * self.factors_count + i, ])
             clique.set_potential(self.state_factor_potentials)
-
+            self.junction_chain.add_clique(clique)
+            # print(vars)
+            # print(list(range(i*self.factors_count, i*self.factors_count + self.factors_count)) + \
+            #                     [self.num_observations * self.factors_count + i, ])
+            print(clique.potential)
             if (i*self.factors_count + self.factors_count) < (self.num_observations * self.factors_count):
+                # print('i = ', i)
                 for j in range(self.factors_count):
+                    # print('i = ', i)
                     child_clique = Clique(self.factors_count + 1, \
                                           self.states_count, \
                                             vars=list(range(i*self.factors_count + j, i*self.factors_count + j + self.factors_count + 1)))
+                    # print('-' * 10, i, j)
+                    # print(i*self.factors_count + j, i*self.factors_count + j + self.factors_count + 1)
+                    # print(list(range(i*self.factors_count + j, i*self.factors_count + j + self.factors_count + 1)))
+                    mod = self.states_count ** (self.factors_count)
+                    for k in range(self.states_count * mod):
+                        child_clique.set_potential_from_index(k, \
+                                                              self.transition_potentials[j][(k // mod) * 2 + (k % 2)])
+                    print(child_clique.potential)
+                    self.junction_chain.add_clique(child_clique)
+                    # print('i = ', i)
                     
-                    mod = self.states_count ** (self.factors_count - 1)
-                    for i in range(self.states_count * mod):
-                        child_clique.set_potential_from_index(i, \
-                                                              self.transition_potentials[j][(i // mod) * 2 + (i % 2)])
 
 
     def assign_potentials_to_cliques(self):
@@ -176,10 +226,40 @@ class Inference:
         
         Refer to the problem statement for details on computing the partition function.
         """
-        first_message = Message([], [1,])
-        for clique in self.junction_chain.cliques:
-            for i in range(self.num_states ** (self.factors_count + 1)):
-                pass
+        c = self.junction_chain.cliques[0]
+        message = Message(c.vars, [1,] * (self.states_count ** len(c.vars)), self.states_count)
+        for idx, clique in enumerate(self.junction_chain.cliques):
+            vars_to_marginalize = []
+            new_message_potential = []
+            if idx + 1 < len(self.junction_chain.cliques):
+                next_clique = self.junction_chain.cliques[idx + 1]
+                common_vars = list(set(clique.vars) & set(next_clique.vars))
+                vars_to_marginalize = list(set(clique.vars) - set(common_vars))
+                new_message_potential = [0,] * (self.states_count ** len(common_vars))
+                # print('--------------------------', common_vars, vars_to_marginalize, '--------------------------')
+            else:
+                vars_to_marginalize = clique.vars
+                new_message_potential = [0,]
+                # print('-------------------------- Final Marginalization --------------------------')
+                # print('Vars to marginalize: ', vars_to_marginalize)
+            for i in range(len(new_message_potential)):
+                assignment = dict()
+                for j in range(len(common_vars)):
+                    assignment[common_vars[j]] = (i // (self.states_count ** (len(common_vars) - j - 1))) % self.states_count
+                # print('Common vars: ', common_vars, ' Assignment: ', assignment)
+                for j in range((self.states_count ** len(vars_to_marginalize))):
+                    for k in range(len(vars_to_marginalize)):
+                        assignment[vars_to_marginalize[k]] = (j // (self.states_count ** (len(vars_to_marginalize) - k - 1))) % self.states_count
+                    # print('Full Assignment: ', assignment)
+                    new_message_potential[i] += clique.get_potential_from_dict(assignment) * message.get_potential_from_dict(assignment)
+                    # print(clique.get_potential_from_dict(assignment) * message.get_potential_from_dict(assignment))
+                # new_message_potential[i] * = message.get_potential_from_dict(assignment)
+                # print('Assignment: ', assignment, ' Potential: ', new_message_potential[i])
+            message = Message(common_vars, new_message_potential, self.states_count)
+            print('message potential: ', message.potential)
+        print('Z value: ', message.potential[0])
+                
+                    
 
     def compute_marginals(self):
         """
@@ -223,7 +303,7 @@ class Get_Input_and_Check_Output:
     def get_output(self):
         n = len(self.data)
         output = []
-        for i in range(n):
+        for i in range(2, 3):
             inference = Inference(self.data[i]['Input'])
             z_value = inference.get_z_value()
             marginals = inference.compute_marginals()
