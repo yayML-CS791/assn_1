@@ -1,7 +1,5 @@
 import json
-from re import S
-
-import comm
+import heapq
 
 ########################################################################
 
@@ -9,6 +7,44 @@ import comm
 # json, math, itertools, collections, functools, random, heapq, etc.
 
 ########################################################################
+
+class KHeap:
+    def __init__(self, k):
+        self.k = k
+        self.heap = []
+    
+    def add(self, item):
+        if len(self.heap) < self.k:
+            heapq.heappush(self.heap, item)
+        else:
+            heapq.heappushpop(self.heap, item)
+    
+    def get_top_k(self):
+        return sorted(self.heap, reverse=True)
+    
+class Assignment:
+    def __init__(self, vars, assignment_dict, potential, states_count=2):
+        self.message = None
+        self.vars = vars
+        self.potential = potential
+        self.states_count = states_count
+        self.assignment_dict = assignment_dict
+        self.index_map = dict()
+        for i in range(len(vars)):
+            self.index_map[vars[i]] = i
+    
+    def __lt__(self, other):
+        return self.potential < other.potential
+    
+    def __str__(self):
+        return 'Assignment: ' + str(self.assignment_dict) + ', Potential: ' + str(self.potential) + '\n'
+    
+    def serialize(self, z):
+        # print(self.assignment_dict)
+        return {
+            'assignment': [self.assignment_dict[i] for i in range(len(self.assignment_dict))],
+            'probability': self.potential / z
+        }
 
 class JunctionChain:
     def __init__(self):
@@ -64,12 +100,11 @@ class Clique:
         return 'Clique with vars: ' + str(self.vars) + '\n'
 
 class Message:
-    def __init__(self, vars, potential, states_count=2, init_assignment=None):
+    def __init__(self, vars, potential, states_count=2):
         self.vars = vars
         self.potential = potential
         self.index_map = dict()
         self.states_count = states_count
-        self.init_assignment = init_assignment
         for i in range(len(vars)):
             self.index_map[vars[i]] = i
 
@@ -85,8 +120,6 @@ class Message:
             return 1
         for i in range(len(self.vars)):
             index += assignment_dict[self.vars[i]] * (self.states_count ** (len(self.vars) - i - 1))
-            if self.vars[i] in self.init_assignment and self.init_assignment[self.vars[i]] != assignment_dict[self.vars[i]]:
-                return 0
         return self.potential[index]
     
     def get_index_of_var(self, var):
@@ -97,7 +130,6 @@ class Message:
 
     def set_potential_from_assignment(self, assignment, value):
         index = 0
-        
         for i, val in enumerate(assignment):
             index += val * (self.num_nodes ** (len(assignment) - i - 1))
         self.potential[index] = value
@@ -144,7 +176,6 @@ class Inference:
             self.assignment[self.factors_count * self.num_observations + i] = self.observation_sequence[i]
         self.junction_chain = JunctionChain()
         self.get_junction_tree()
-        # self.z = self.get_z_value()
   
     def triangulate_and_get_cliques(self):
         """
@@ -210,7 +241,7 @@ class Inference:
         c = self.junction_chain.cliques[0]
         if not forward:
             c = self.junction_chain.cliques[len(self.junction_chain.cliques) - 1]
-        message = Message(c.vars, [1,] * (self.states_count ** len(c.vars)), self.states_count, init_assignment=self.assignment)
+        message = Message(c.vars, [1,] * (self.states_count ** len(c.vars)), self.states_count)
         l = list(reversed(self.junction_chain.cliques) if not forward else self.junction_chain.cliques)
         for idx, clique in enumerate(l):
             vars_to_marginalize = []
@@ -226,15 +257,17 @@ class Inference:
                 new_message_potential = [0,]
                 common_vars = []
             for i in range(len(new_message_potential)):
-                assignment = dict()
-                for j in range(len(common_vars)):
-                    assignment[common_vars[j]] = (i // (self.states_count ** (len(common_vars) - j - 1))) % self.states_count
                 for j in range((self.states_count ** len(vars_to_marginalize))):
-                    for k in range(len(vars_to_marginalize)):
-                        assignment[vars_to_marginalize[k]] = (j // (self.states_count ** (len(vars_to_marginalize) - k - 1))) % self.states_count
+                    assignment = dict()
+                    for m in range(len(common_vars)):
+                        assignment[common_vars[m]] = (i // (self.states_count ** (len(common_vars) - m - 1))) % self.states_count
+                    for m in range(len(vars_to_marginalize)):
+                        assignment[vars_to_marginalize[m]] = (j // (self.states_count ** (len(vars_to_marginalize) - m - 1))) % self.states_count
                     new_message_potential[i] += clique.get_potential_from_dict(assignment) * message.get_potential_from_dict(assignment)
-            message = Message(common_vars, new_message_potential, self.states_count, init_assignment=self.assignment)
+            message = Message(common_vars, new_message_potential, self.states_count)
             message_list.append(message)
+            # print(clique.potential)
+            # print(message.potential)
 
     def get_z_value(self):
         """
@@ -263,7 +296,10 @@ class Inference:
         Refer to the sample test case for the expected format of the marginals.
         """
         self.pass_messages(self.backward_messages, False)
+        # print(''.join([str(m.potential) + '\n' for m in self.backward_messages]))
+        # print(''.join([str(c) for c in self.junction_chain.cliques]))
         z = self.forward_messages[-1].potential[0]
+        # print(z)
         self.backward_messages = list(reversed(self.backward_messages))
         marginals = [[0, ] * self.states_count for _ in range(self.factors_count * self.num_observations)]
         variables_done = set()
@@ -292,9 +328,47 @@ class Inference:
         
         Refer to the sample test case for the expected format of the top-k assignments.
         """
-        pass
-
-
+        c = self.junction_chain.cliques[0]
+        curr_heap = KHeap(self.k)
+        assignment = Assignment([], {}, 1, self.states_count)
+        heap = KHeap(self.k)
+        heap.add(assignment)
+        message = Message(c.vars, [heap,] * (self.states_count ** len(c.vars)), self.states_count)
+        curr_heap.add(assignment)
+        l = self.junction_chain.cliques
+        for idx, clique in enumerate(l):
+            vars_to_marginalize = []
+            new_message_potential = []
+            common_vars = []
+            if idx + 1 < len(l):
+                next_clique = l[idx + 1]
+                common_vars = list(set(clique.vars) & set(next_clique.vars))
+                vars_to_marginalize = list(set(clique.vars) - set(common_vars))
+                new_message_potential = [0,] * (self.states_count ** len(common_vars))
+            else:
+                vars_to_marginalize = clique.vars
+                new_message_potential = [0,]
+                common_vars = []
+            # print(idx)
+            for i in range(len(new_message_potential)):
+                new_message_potential[i] = KHeap(self.k)
+                for j in range((self.states_count ** len(vars_to_marginalize))):
+                    assignment = dict()
+                    for m in range(len(common_vars)):
+                        assignment[common_vars[m]] = (i // (self.states_count ** (len(common_vars) - m - 1))) % self.states_count
+                    for m in range(len(vars_to_marginalize)):
+                        assignment[vars_to_marginalize[m]] = (j // (self.states_count ** (len(vars_to_marginalize) - m - 1))) % self.states_count
+                    for prev_assignment in message.get_potential_from_dict(assignment).get_top_k():
+                        new_assignment_dict = assignment.copy()
+                        for var in prev_assignment.assignment_dict:
+                            new_assignment_dict[var] = prev_assignment.assignment_dict[var]
+                        new_assignment = Assignment(clique.vars, new_assignment_dict, clique.get_potential_from_dict(assignment) * prev_assignment.potential, self.states_count)
+                        # print('new_assn: ', new_assignment_dict)
+                        new_message_potential[i].add(new_assignment)
+            message = Message(common_vars, new_message_potential, self.states_count)
+            # print(clique.potential)
+        top_k_assignments = [assignment.serialize(self.z) for assignment in message.potential[0].get_top_k()]
+        return top_k_assignments
 
 ########################################################################
 
