@@ -18,10 +18,10 @@ class JunctionChain:
         self.cliques.append(clique)
 
     def __str__(self):
-        return 'Junction Chain with cliques: ' + '\n' + '\n'.join([str(clique) for clique in self.cliques])
+        return ''.join([j for j in self.cliques])
 
 class Clique:
-    def __init__(self, num_nodes, num_states, init_assignment, vars=None,):
+    def __init__(self, num_nodes, num_states, init_assignment, vars=None):
         self.num_nodes = num_nodes
         self.potential = [1,] * (num_states ** num_nodes)
         self.vars = vars
@@ -39,14 +39,10 @@ class Clique:
     
     def get_potential_from_dict(self, assignment_dict):
         index = 0
-        # print(assignment_dict, self.vars)
         for i in range(len(self.vars)):
             index += assignment_dict[self.vars[i]] * (self.num_states ** (len(self.vars) - i - 1))
-            # print(assignment_dict)
             if self.vars[i] in self.init_assignment and self.init_assignment[self.vars[i]] != assignment_dict[self.vars[i]]:
                 return 0
-        # print(index)
-        # print(self.potential)
         return self.potential[index]
     
     def set_potential_from_assignment(self, assignment, value):
@@ -65,7 +61,7 @@ class Clique:
         return self.index_map[var]
     
     def __str__(self):
-        return 'Clique with vars: ' + str(self.vars)
+        return 'Clique with vars: ' + str(self.vars) + '\n'
 
 class Message:
     def __init__(self, vars, potential, states_count=2, init_assignment=None):
@@ -85,6 +81,8 @@ class Message:
     
     def get_potential_from_dict(self, assignment_dict):
         index = 0
+        if len(self.vars) == 0:
+            return 1
         for i in range(len(self.vars)):
             index += assignment_dict[self.vars[i]] * (self.states_count ** (len(self.vars) - i - 1))
             if self.vars[i] in self.init_assignment and self.init_assignment[self.vars[i]] != assignment_dict[self.vars[i]]:
@@ -99,6 +97,7 @@ class Message:
 
     def set_potential_from_assignment(self, assignment, value):
         index = 0
+        
         for i, val in enumerate(assignment):
             index += val * (self.num_nodes ** (len(assignment) - i - 1))
         self.potential[index] = value
@@ -135,18 +134,18 @@ class Inference:
         self.state_factor_potentials_sum = [sum(self.state_factor_potentials[i:i+self.states_count]) for i in range(0, len(self.state_factor_potentials), self.states_count)]
         self.state_factor_potentials = [potential/self.state_factor_potentials_sum[i//self.states_count] for i, potential in enumerate(self.state_factor_potentials)]
         self.k = data['K']
+        self.z = None
 
         # My code
         self.assignment = dict()
+        self.forward_messages = list()
+        self.backward_messages = list()
         for i in range(len(self.observation_sequence)):
             self.assignment[self.factors_count * self.num_observations + i] = self.observation_sequence[i]
-        # print('Assignment: ', self.assignment)
         self.junction_chain = JunctionChain()
         self.get_junction_tree()
-        for clique in self.junction_chain.cliques:
-            print(clique)
-        
-        
+        # self.z = self.get_z_value()
+  
     def triangulate_and_get_cliques(self):
         """
         Triangulate the undirected graph and extract the maximal cliques.
@@ -173,41 +172,26 @@ class Inference:
 
         Refer to the problem statement for details on junction tree construction.
         """
-        # print('No of observations: ', self.num_observations)
         for i in range(self.num_observations):
-            # clique = Clique(self.factors_count + 1, \
-            #                 self.states_count,
-            #                     init_assignment=self.assignment,
-            #                     vars=list(range(i*self.factors_count, i*self.factors_count + self.factors_count)) + [self.factors_count * self.num_observations + i])
-            # clique.set_potential(self.state_factor_potentials)
             clique = Clique(self.factors_count, 
                             self.states_count,
                             init_assignment=self.assignment, 
                             vars=list(range(i*self.factors_count, i*self.factors_count + self.factors_count)))
-            print(i)
             clique.set_potential(self.state_factor_potentials[
                 self.observation_sequence[i]: len(self.state_factor_potentials): self.states_count
             ])
-            print(clique.potential)
-            clique.set_potential(
-                self.state_factor_potentials[
-                    self.observation_sequence[i] * (self.states_count ** (self.factors_count)): 
-                    (self.observation_sequence[i] + 1) * (self.states_count ** (self.factors_count))
-            ])
-            print(clique.potential)
             self.junction_chain.add_clique(clique)
             if (i*self.factors_count + self.factors_count) < (self.num_observations * self.factors_count):
                 for j in range(self.factors_count):
-                    child_clique = Clique(self.factors_count + 1, \
+                    child_clique = Clique(self.factors_count + 1,
                                           self.states_count,
                                             init_assignment=self.assignment,
                                             vars=list(range(i*self.factors_count + j, i*self.factors_count + j + self.factors_count + 1)))
                     mod = self.states_count ** (self.factors_count)
                     for k in range(self.states_count * mod):
                         child_clique.set_potential_from_index(k, \
-                                                              self.transition_potentials[j][(k // mod) * 2 + (k % 2)])
+                                                              self.transition_potentials[j][(k // mod) * self.states_count + (k % self.states_count)])
                     self.junction_chain.add_clique(child_clique)
-
 
     def assign_potentials_to_cliques(self):
         """
@@ -222,6 +206,36 @@ class Inference:
         """
         pass
 
+    def pass_messages(self, message_list: list, forward):
+        c = self.junction_chain.cliques[0]
+        if not forward:
+            c = self.junction_chain.cliques[len(self.junction_chain.cliques) - 1]
+        message = Message(c.vars, [1,] * (self.states_count ** len(c.vars)), self.states_count, init_assignment=self.assignment)
+        l = list(reversed(self.junction_chain.cliques) if not forward else self.junction_chain.cliques)
+        for idx, clique in enumerate(l):
+            vars_to_marginalize = []
+            new_message_potential = []
+            common_vars = []
+            if idx + 1 < len(l):
+                next_clique = l[idx + 1]
+                common_vars = list(set(clique.vars) & set(next_clique.vars))
+                vars_to_marginalize = list(set(clique.vars) - set(common_vars))
+                new_message_potential = [0,] * (self.states_count ** len(common_vars))
+            else:
+                vars_to_marginalize = clique.vars
+                new_message_potential = [0,]
+                common_vars = []
+            for i in range(len(new_message_potential)):
+                assignment = dict()
+                for j in range(len(common_vars)):
+                    assignment[common_vars[j]] = (i // (self.states_count ** (len(common_vars) - j - 1))) % self.states_count
+                for j in range((self.states_count ** len(vars_to_marginalize))):
+                    for k in range(len(vars_to_marginalize)):
+                        assignment[vars_to_marginalize[k]] = (j // (self.states_count ** (len(vars_to_marginalize) - k - 1))) % self.states_count
+                    new_message_potential[i] += clique.get_potential_from_dict(assignment) * message.get_potential_from_dict(assignment)
+            message = Message(common_vars, new_message_potential, self.states_count, init_assignment=self.assignment)
+            message_list.append(message)
+
     def get_z_value(self):
         """
         Compute the partition function (Z value) of the graphical model.
@@ -233,42 +247,9 @@ class Inference:
         
         Refer to the problem statement for details on computing the partition function.
         """
-        c = self.junction_chain.cliques[0]
-        message = Message(c.vars, [1,] * (self.states_count ** len(c.vars)), self.states_count, init_assignment=self.assignment)
-        # print(self.assignment)
-        for idx, clique in enumerate(self.junction_chain.cliques):
-            vars_to_marginalize = []
-            new_message_potential = []
-            common_vars = []
-            if idx + 1 < len(self.junction_chain.cliques):
-                next_clique = self.junction_chain.cliques[idx + 1]
-                common_vars = list(set(clique.vars) & set(next_clique.vars))
-                vars_to_marginalize = list(set(clique.vars) - set(common_vars))
-                new_message_potential = [0,] * (self.states_count ** len(common_vars))
-                # print('--------------------------', common_vars, vars_to_marginalize, '--------------------------')
-            else:
-                vars_to_marginalize = clique.vars
-                new_message_potential = [0,]
-                common_vars = []
-                # print('-------------------------- Final Marginalization --------------------------')
-            for i in range(len(new_message_potential)):
-                assignment = dict()
-                for j in range(len(common_vars)):
-                    assignment[common_vars[j]] = (i // (self.states_count ** (len(common_vars) - j - 1))) % self.states_count
-                # print('Common vars: ', common_vars, ' Assignment: ', assignment)
-                # print('Vars to marginalize: ', vars_to_marginalize)
-                for j in range((self.states_count ** len(vars_to_marginalize))):
-                    for k in range(len(vars_to_marginalize)):
-                        assignment[vars_to_marginalize[k]] = (j // (self.states_count ** (len(vars_to_marginalize) - k - 1))) % self.states_count
-                    # print('Full Assignment: ', assignment)
-                    new_message_potential[i] += clique.get_potential_from_dict(assignment) * message.get_potential_from_dict(assignment)
-                    # print(assignment)
-                    # print(clique.get_potential_from_dict(assignment), message.get_potential_from_dict(assignment))
-            message = Message(common_vars, new_message_potential, self.states_count, init_assignment=self.assignment)
-            # print(message.potential)
-            # print('message potential: ', message.potential)
-        print('Z value: ', message.potential[0])
-        return message.potential[0]
+        self.pass_messages(self.forward_messages, True)
+        self.z = self.forward_messages[-1].potential[0]
+        return self.forward_messages[-1].potential[0]
 
     def compute_marginals(self):
         """
@@ -281,7 +262,24 @@ class Inference:
         
         Refer to the sample test case for the expected format of the marginals.
         """
-        pass
+        self.pass_messages(self.backward_messages, False)
+        z = self.forward_messages[-1].potential[0]
+        self.backward_messages = list(reversed(self.backward_messages))
+        marginals = [[0, ] * self.states_count for _ in range(self.factors_count * self.num_observations)]
+        variables_done = set()
+        for i in range(len(self.junction_chain.cliques)):
+            for j in range(len(self.junction_chain.cliques[i].potential)):
+                assignment = dict()
+                for k in range(len(self.junction_chain.cliques[i].vars)):
+                    assignment[self.junction_chain.cliques[i].vars[k]] = (j // (self.states_count ** (len(self.junction_chain.cliques[i].vars) - k - 1))) % self.states_count
+                for k in set(self.junction_chain.cliques[i].vars) - variables_done:
+                    marginals[k][assignment[k]] += \
+                    self.junction_chain.cliques[i].get_potential_from_dict(assignment) * \
+                    (self.forward_messages[i - 1].get_potential_from_dict(assignment)) * \
+                    (1 if i+1 >= len(self.backward_messages) else self.backward_messages[i + 1].get_potential_from_dict(assignment)) / z
+            for k in self.junction_chain.cliques[i].vars:
+                variables_done.add(k)
+        return marginals
 
     def compute_top_k(self):
         """
@@ -312,9 +310,7 @@ class Get_Input_and_Check_Output:
     def get_output(self):
         n = len(self.data)
         output = []
-        # print(n)
-        for i in range(3, 4):
-            # print(f'Processing Test case {i+1}/{n}')
+        for i in range(n):
             inference = Inference(self.data[i]['Input'])
             z_value = inference.get_z_value()
             marginals = inference.compute_marginals()
