@@ -28,6 +28,7 @@ class Inference:
         self.messages_from_variables_to_factors = [[[1]*self.states_count for _ in range(self.factors_count)] for _ in range(self.num_observations)]
         self.messages_from_variables_to_transitions = [[[[1]*self.states_count]*2 for factor_num in range(self.factors_count)] for n in range(self.num_observations-1)]
 
+        # print(np.array(self.messages_from_variables_to_transitions).shape)
         self.state_potentials_given_observation = []
 
         for observation in range(self.num_observations):
@@ -63,7 +64,8 @@ class Inference:
                 for i_fact in range(self.factors_count):
                     index = self.assignmentToIndex(assignment)
                     self.factor_beliefs[i_ob][index] *= self.messages_from_variables_to_factors[i_ob][i_fact][assignment[i_fact]]
-                    self.factor_beliefs[i_ob][index] /= self.previous_messages_from_variables_to_factors[i_ob][i_fact][assignment[i_fact]]
+
+                    self.factor_beliefs[i_ob][index] /= max(1e-12,self.previous_messages_from_variables_to_factors[i_ob][i_fact][assignment[i_fact]])
 
     def updateTransitionNodeBeliefs(self):
         for i_ob in range(self.num_observations - 1):
@@ -75,13 +77,44 @@ class Inference:
                     index = self.assignmentToIndex(assignment)
 
                     # The indicies have been hardcoded, check if this is correct
-                    self.transition_beliefs[i_ob][i_fact][index] *= self.messages_from_variables_to_transitions[i_ob][i_fact][assignment[0]][assignment[1]]
-                    self.transition_beliefs[i_ob][i_fact][index] /= self.previous_messages_from_variables_to_transitions[i_ob][i_fact][assignment[0]][assignment[1]]
+                    self.transition_beliefs[i_ob][i_fact][index] *= self.messages_from_variables_to_transitions[i_ob][i_fact][0][assignment[0]]
+                    self.transition_beliefs[i_ob][i_fact][index] *= self.messages_from_variables_to_transitions[i_ob][i_fact][1][assignment[1]]
+
+                    self.transition_beliefs[i_ob][i_fact][index] /= max(1e-12, self.previous_messages_from_variables_to_transitions[i_ob][i_fact][0][assignment[0]])
+                    self.transition_beliefs[i_ob][i_fact][index] /= max(1e-12, self.previous_messages_from_variables_to_transitions[i_ob][i_fact][1][assignment[1]])
+
+    def updateVariableBeliefs(self):
+        K = self.states_count
+
+        for i_ob in range(self.num_observations):
+            for i_fact in range(self.factors_count):
+                curr_var = i_ob * self.factors_count + i_fact
+                for s in range(self.states_count):
+                    self.variable_beliefs[curr_var][s] *= self.messages_from_factors_to_variables[i_ob][i_fact][s]
+                    self.variable_beliefs[curr_var][s] /= max(self.previous_messages_from_factors_to_variables[i_ob][i_fact][s], 1e-12)
+
+        for i_ob in range(self.num_observations - 1):
+            for i_fact in range(self.factors_count):
+                curr_var_left = i_ob * self.factors_count + i_fact
+                curr_var_right = (i_ob + 1) * self.factors_count + i_fact
+                for s in range(self.states_count):
+                    self.variable_beliefs[curr_var_left][s] *= self.messages_from_transitions_to_variables[i_ob][i_fact][0][s]
+                    self.variable_beliefs[curr_var_right][s] *= self.messages_from_transitions_to_variables[i_ob][i_fact][1][s]
+                    self.variable_beliefs[curr_var_left][s] /= max(self.previous_messages_from_transitions_to_variables[i_ob][i_fact][0][s], 1e-12)
+                    self.variable_beliefs[curr_var_right][s] /= max(self.previous_messages_from_transitions_to_variables[i_ob][i_fact][1][s], 1e-12)
+
+        for v in range(len(self.variable_beliefs)):
+            total = sum(self.variable_beliefs[v])
+            if total > 0:
+                self.variable_beliefs[v] = [x/total for x in self.variable_beliefs[v]]
+            else:
+                self.variable_beliefs[v] = [1.0/self.states_count] * self.states_count
 
     def messageToSendFromFactor(self, factor_node_belief, i_fact, i_ob):
-        message_to_send = [1, 1]
+        message_to_send = [1] * self.states_count
         for assignment in itertools.product(range(self.states_count), repeat=self.factors_count):
-            message_to_send[assignment[i_fact]] *= factor_node_belief[i_ob][self.assignmentToIndex(assignment)] 
+
+            message_to_send[assignment[i_fact]] *= factor_node_belief[self.assignmentToIndex(assignment)] 
             for other_vbles in range(self.factors_count):
                 if (other_vbles != i_fact): 
                     message_to_send[assignment[i_fact]] *= self.messages_from_variables_to_factors[i_ob][other_vbles][assignment[other_vbles]]
@@ -89,16 +122,16 @@ class Inference:
         return message_to_send
     
     def messageToSendFromTransition(self, i_fact, i_ob, i_assignment):
-        message_to_send = [1, 1]
+        message_to_send = [1] * self.states_count
         for assignment in itertools.product(range(self.states_count), repeat=2):
             # assuming assignment[0] is for the first variable and assignment[1] is for the second variable
             message_to_send[assignment[i_assignment]] *= self.transition_beliefs[i_ob][i_fact][self.assignmentToIndex(assignment)]
 
             if (i_assignment == 0):
                 # Let 0 indicate message that came from the right and 1 came from the left to the transition node (from the perspective of the node, it would've sent the message to the left and right)
-                message_to_send[assignment[0]] *= self.messages_from_variables_to_transitions[i_ob + 1][i_fact][0][assignment[1]]
+                message_to_send[assignment[0]] *= self.messages_from_variables_to_transitions[i_ob][i_fact][1][assignment[1]]
             elif (i_assignment == 1):
-                message_to_send[assignment[1]] *= self.messages_from_variables_to_transitions[i_ob - 1][i_fact][1][assignment[0]]
+                message_to_send[assignment[1]] *= self.messages_from_variables_to_transitions[i_ob][i_fact][0][assignment[0]]
             else:
                 raise ValueError("i_assignment should be either 0 or 1")
         return message_to_send
@@ -107,49 +140,30 @@ class Inference:
         for i_ob in range(self.num_observations):
             factor_node_belief = self.factor_beliefs[i_ob]
             for i_fact in range(self.factors_count):
-                curr_var = i_ob * self.factors_count + i_fact
-                self.messages_from_factors_to_variables[curr_var] = self.messageToSendFromFactor(factor_node_belief, i_fact, i_ob)
+                self.messages_from_factors_to_variables[i_ob][i_fact] = self.messageToSendFromFactor(factor_node_belief, i_fact, i_ob)
 
 
         for i_ob in range(self.num_observations - 1):
             for i_fact in range(self.factors_count):
                 self.messages_from_transitions_to_variables[i_ob][i_fact][0] = self.messageToSendFromTransition(i_fact, i_ob, 0)
-                self.messages_from_transitions_to_variables[i_ob + 1][i_fact][1] = self.messageToSendFromTransition(i_fact, i_ob + 1, 1)
+                self.messages_from_transitions_to_variables[i_ob][i_fact][1] = self.messageToSendFromTransition(i_fact, i_ob, 1)
 
-
-    def updateVariableBeliefs(self):
-        for i_ob in range(self.num_observations):
-            for i_fact in range(self.factors_count):
-                curr_var = i_ob * self.factors_count + i_fact
-
-                self.variable_beliefs[curr_var] *= self.messages_from_factors_to_variables[curr_var]
-                self.variable_beliefs[curr_var] /= self.previous_messages_from_factors_to_variables[curr_var]
-                self.variable_beliefs[curr_var] = self.messages_from_transitions_to_variables[curr_var]
-                self.variable_beliefs[curr_var] /= self.previous_messages_from_transitions_to_variables[curr_var]
-
-        for i_ob in range(self.num_observations - 1):
-            for i_fact in range(self.factors_count):
-                curr_var_left = i_ob * self.factors_count + i_fact
-                curr_var_right = (i_ob + 1) * self.factors_count + i_fact
-                self.variable_beliefs[curr_var_left] *= self.messages_from_transitions_to_variables[i_ob][i_fact][0]
-                self.variable_beliefs[curr_var_right] *= self.messages_from_transitions_to_variables[i_ob + 1][i_fact][1]
-                self.variable_beliefs[curr_var_left] /= self.previous_messages_from_transitions_to_variables[i_ob][i_fact][0]
-                self.variable_beliefs[curr_var_right] /= self.previous_messages_from_transitions_to_variables[i_ob + 1][i_fact][1]
-        
 
     def sendMessagesToFactorsNodes(self):
         for i_ob in range(self.num_observations):
             for i_fact in range(self.factors_count):
                 curr_var = i_ob * self.factors_count + i_fact
                 # self.messages_from_variables_to_factors[i_ob][i_fact] = self.variable_beliefs[curr_var]
-                self.messages_from_variables_to_factors[i_ob][i_fact] = self.messages_from_factors_to_variables[curr_var]
+                self.messages_from_variables_to_factors[i_ob][i_fact] = self.messages_from_factors_to_variables[i_ob][i_fact]
 
     # check this once
     def sendMessagesToTransNodes(self):
         for i_ob in range(self.num_observations - 1):
             for i_fact in range(self.factors_count):
-                self.messages_from_variables_to_transitions[i_ob][i_fact][0] = self.messages_from_transitions_to_variables[i_ob][i_fact][0]
-                self.messages_from_variables_to_transitions[i_ob + 1][i_fact][1] = self.messages_from_transitions_to_variables[i_ob + 1][i_fact][1]
+                a = self.messages_from_transitions_to_variables[i_ob][i_fact][0]
+                b = self.messages_from_transitions_to_variables[i_ob][i_fact][1]
+                self.messages_from_variables_to_transitions[i_ob][i_fact][0] = [x*y for x, y in zip(a, b)]
+                self.messages_from_variables_to_transitions[i_ob][i_fact][1] = [x*y for x, y in zip(a, b)]
 
     def compute_marginals(self):
         self.variable_beliefs = [[1/self.states_count]*self.states_count for _ in range(self.variables_count)]
@@ -161,6 +175,7 @@ class Inference:
             self.updateFactorNodeBeliefs()
             self.updateTransitionNodeBeliefs()
             self.sendMessagesToVariables()
+
             self.previous_messages_from_factors_to_variables = self.messages_from_factors_to_variables.copy()
 
             self.updateVariableBeliefs()
@@ -194,7 +209,7 @@ class Get_Input_and_Check_Output:
     def get_output(self):
         n = len(self.data)
         output = []
-        for i in range(3, 5):
+        for i in range(5):
             inference = Inference(self.data[i]['Input'])
             marginals = inference.compute_marginals()
             output.append({
