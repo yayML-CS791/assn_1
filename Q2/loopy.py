@@ -34,17 +34,29 @@ class Inference:
         self.messages_from_variables_to_factors = [[[1]*self.states_count for _ in range(self.factors_count)] for _ in range(self.num_observations)]
         self.messages_from_variables_to_transitions = [[[ [1]*self.states_count for _ in range(2) ] for _ in range(self.factors_count)] for _ in range(self.num_observations - 1)]
         
-        self.state_potentials_given_observation = []
-
-        for observation in range(self.num_observations):
-            self.state_potentials_given_observation.append(self.state_factor_potentials[self.observation_sequence[observation]::self.states_count])
-
         self.variable_beliefs = [[1.0 / self.states_count] * self.states_count for _ in range(self.variables_count)]
 
+        
+        K = self.states_count
+        num_assignments = self.states_count ** self.factors_count
+        flat = self.state_factor_potentials
+
+        rows = [flat[i*K:(i+1)*K] for i in range(num_assignments)]
+
+
+        self.state_potentials_given_observation = []
         self.factor_beliefs = []
-        for i_ob in range(self.num_observations):
-            observation = self.observation_sequence[i_ob]
-            self.factor_beliefs.append(self.state_potentials_given_observation[observation][:])
+        for t in range(self.num_observations):
+            obs_val = self.observation_sequence[t]
+           
+            factor_pot = [rows[idx][obs_val] for idx in range(num_assignments)]
+            s = sum(factor_pot)
+            if s > 0:
+                factor_pot = [x / s for x in factor_pot]
+            else:
+                factor_pot = [1.0 / num_assignments] * num_assignments
+            self.state_potentials_given_observation.append(factor_pot[:])  
+            self.factor_beliefs.append(factor_pot[:])
 
         self.transition_beliefs = []
         for i_ob in range(self.num_observations - 1):
@@ -99,13 +111,10 @@ class Inference:
         for i_ob in range(self.num_observations):
             for i_fact in range(self.factors_count):
                 curr_var = i_ob * self.factors_count + i_fact
-                # print("MESSAGE SENT: ", self.messages_from_factors_to_variables[i_ob][i_fact])
-                # print("PREVIOUS MESSAGE SENT: ", self.previous_messages_from_factors_to_variables[i_ob][i_fact])
                 for s in range(self.states_count):
                     
                     self.variable_beliefs[curr_var][s] *= self.messages_from_factors_to_variables[i_ob][i_fact][s]
                     self.variable_beliefs[curr_var][s] /= max(self.previous_messages_from_factors_to_variables[i_ob][i_fact][s], 1e-12)
-        # print(self.variable_beliefs)
         for i_ob in range(self.num_observations - 1):
             for i_fact in range(self.factors_count):
                 curr_var_left = i_ob * self.factors_count + i_fact
@@ -211,13 +220,15 @@ class Inference:
 
     def compute_marginals(self):
 
-        max_iterations = 200
-        tolerance = 1e-6
+
+        max_iterations = 300
+        tolerance = 1e-10
         for _ in range(max_iterations):
             
             old_beliefs = copy.deepcopy(self.variable_beliefs)
 
             # Updating factor beliefs and sending messages to variables
+
             self.updateFactorNodeBeliefs()
             self.updateTransitionNodeBeliefs()
             self.sendMessagesToVariables()
@@ -238,7 +249,6 @@ class Inference:
                     max_diff = max(max_diff, diff)
             if max_diff < tolerance:
                 break
-
         return self.variable_beliefs
 
 ########################################################################

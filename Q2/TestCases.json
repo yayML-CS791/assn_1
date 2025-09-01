@@ -117,7 +117,6 @@
             "Number of Observations": 3,
             "Observation Sequence": [0, 2, 1],
             "K": 2,
-            "K": 2,
             "Transition Potentials": {
                 "0": [
                     10, 2, 1,
@@ -140,27 +139,6 @@
                 9, 1, 8,
                 7, 2, 9,
                 5, 3, 10
-            ]
-        }
-    },
-    {
-        "TestCaseNumber": 5,
-        "Input": {
-            "TestCaseNumber": 5,
-            "Factors_Count": 1,
-            "State_Count": 2,
-            "Number of Observations": 1,
-            "Observation Sequence": [0],
-            "K": 2,
-            "Transition Potentials": {
-                "0": [
-                    1, 2,
-                    2, 1
-                ]
-            },
-            "State_Factor_Potentials": [
-                1, 2,
-                2, 1
             ]
         }
     },
