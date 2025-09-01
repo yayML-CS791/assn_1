@@ -24,17 +24,30 @@ class Inference:
         self.state_factor_potentials = [potential/self.state_factor_potentials_sum[i//self.states_count] for i, potential in enumerate(self.state_factor_potentials)]
 
         self.variables_count = self.factors_count * self.num_observations
-        self.messages_from_factors_to_variables = [[[1]*self.states_count for _ in range(self.factors_count)] for _ in range(self.num_observations)]
-        self.messages_from_transitions_to_variables = [[[[1]*self.states_count]*2 for factor_num in range(self.factors_count)] for n in range(self.num_observations-1)]
-        self.messages_from_variables_to_factors = [[[1]*self.states_count for _ in range(self.factors_count)] for _ in range(self.num_observations)]
-        self.messages_from_variables_to_transitions = [[[[1]*self.states_count]*2 for factor_num in range(self.factors_count)] for n in range(self.num_observations-1)]
+        self.messages_from_factors_to_variables = [[1]*self.states_count for _ in range(self.factors_count * self.num_observations)]
+        self.messages_from_transitions_to_variables = [[1]*self.states_count for _ in range(self.factors_count*(self.num_observations - 1))]
+        self.messages_from_variables_to_factors = [[1]*self.states_count for _ in range(self.factors_count * self.num_observations)]
+        self.messages_from_variables_to_transitions = [[1]*self.states_count for _ in range(self.factors_count*(self.num_observations - 1))]
+
+        self.variable_beliefs = [[1/self.states_count]*self.states_count for _ in range(self.variables_count)]
+        self.factor_beliefs = [[1]*self.states_count for _ in range(self.factor_count * self.observation_sequence)]
+        self.transition_beliefs = [[1]*self.states_count for _ in range(self.factor_count * (self.num_observations - 1) * 2)]
 
     def compute_marginals(self):
         self.variable_beliefs = [[1/self.states_count]*self.states_count for _ in range(self.variables_count)]
-        return self.variable_beliefs    
+        return self.variable_beliefs
 
     def loopy_belief_propagate_to_variable(self, prev_beliefs, prev_messages, prev_messages_from_variables, clique_members, composition_func, marginalization_func, inverse_composition_func):
-        raise NotImplementedError()
+        new_messages_from_factors_to_variables = [[1]*self.states_count for _ in range(self.factors_count * self.num_observations)]
+        new_messages_from_transitions_to_variables = [[1]*self.states_count for _ in range(self.factors_count*(self.num_observations - 1))]
+        new_messages_from_variables_to_factors = [[1]*self.states_count for _ in range(self.factors_count)]
+        new_messages_from_variables_to_transitions = [[1]*self.states_count for _ in range(self.factors_count*2)]
+
+        new_variable_beliefs = [1/self.states_count]*self.states_count
+        new_factor_beliefs = [[1]*self.states_count for _ in range(self.factors_count)]
+        new_transition_beliefs = [[[1]*self.states_count]*2 for _ in range(self.factors_count)]
+
+        for i in 
 
     def loopy_belief_propagate_to_factor(self, prev_beliefs, factor_beliefs, prev_messages, prev_messages_from_factor, size_of_clique, composition_func, inverse_composition_func):
         raise NotImplementedError()
@@ -56,7 +69,7 @@ class Get_Input_and_Check_Output:
     def get_output(self):
         n = len(self.data)
         output = []
-        for i in range(n):
+        for i in range(3, 5):
             inference = Inference(self.data[i]['Input'])
             marginals = inference.compute_marginals()
             output.append({
