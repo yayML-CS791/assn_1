@@ -82,8 +82,7 @@ def viterbi(noisy_output, probability_matrix, trellis):
     decoded_bits.reverse()
     return decoded_bits
 
-def bcjr(noisy_output, probability_matrix, app_probability, trellis):
-    eps = 1e-12
+def bcjr(noisy_output, probability_matrix, app_probability, trellis, eps=1e-12):
     steps = len(noisy_output) // 2
     states = len(trellis)
 
@@ -178,7 +177,6 @@ class Inference:
         return decoded
 
     def get_turbocode_output(self, eps=1e-12, delta_thres=1e-2):
-        eps = 1e-12
         steps = self.length
         app_probability1 = [[0.5 for _ in range(steps)] for _ in range(2)]
         app_probability2 = [[0.5 for _ in range(steps)] for _ in range(2)]
