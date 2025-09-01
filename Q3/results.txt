@@ -1,0 +1,65 @@
+1000 bits
+tc1
+Average Viterbi BER: 0.0333
+Average BCJR BER: 0.029200000000000004
+Average Turbo BER: 0.0
+tc2
+Average Viterbi BER: 0.03865000000000001
+Average BCJR BER: 0.036250000000000004
+Average Turbo BER: 0.0
+tc3
+Average Viterbi BER: 0.04840000000000001
+Average BCJR BER: 0.044350000000000014
+Average Turbo BER: 0.0
+tc4
+Average Viterbi BER: 0.031450000000000006
+Average BCJR BER: 0.03060000000000001
+Average Turbo BER: 0.0
+tc5
+Average Viterbi BER: 0.0402
+Average BCJR BER: 0.03610000000000001
+Average Turbo BER: 0.0
+
+5000 bits
+tc1
+Average Viterbi BER: 0.038560000000000004
+Average BCJR BER: 0.03607
+Average Turbo BER: 0.0
+tc2
+Average Viterbi BER: 0.045219999999999996
+Average BCJR BER: 0.04173
+Average Turbo BER: 0.0
+tc3
+Average Viterbi BER: 0.04795
+Average BCJR BER: 0.0449
+Average Turbo BER: 0.0
+tc4
+Average Viterbi BER: 0.03611000000000001
+Average BCJR BER: 0.03354
+Average Turbo BER: 0.0
+tc5
+Average Viterbi BER: 0.036570000000000005
+Average BCJR BER: 0.033389999999999996
+Average Turbo BER: 0.0
+
+10000 bits
+tc1
+Average Viterbi BER: 0.04092
+Average BCJR BER: 0.037720000000000004
+Average Turbo BER: 0.0
+tc2
+Average Viterbi BER: 0.030695
+Average BCJR BER: 0.028954999999999998
+Average Turbo BER: 0.0
+tc3
+Average Viterbi BER: 0.04146499999999999
+Average BCJR BER: 0.038619999999999995
+Average Turbo BER: 1e-05
+tc4
+Average Viterbi BER: 0.035579999999999994
+Average BCJR BER: 0.033615
+Average Turbo BER: 0.0
+tc5
+Average Viterbi BER: 0.039325000000000006
+Average BCJR BER: 0.03685999999999999
+Average Turbo BER: 0.0
