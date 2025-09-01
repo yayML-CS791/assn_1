@@ -243,7 +243,7 @@ class Inference:
             c = self.junction_chain.cliques[len(self.junction_chain.cliques) - 1]
         message = Message(c.vars, [1,] * (self.states_count ** len(c.vars)), self.states_count)
         l = list(reversed(self.junction_chain.cliques) if not forward else self.junction_chain.cliques)
-        for idx, clique in enumerate(l):
+        for idx, clique in enumerate(l):  # (T-1)*M + T iterations
             vars_to_marginalize = []
             new_message_potential = []
             common_vars = []
@@ -256,8 +256,8 @@ class Inference:
                 vars_to_marginalize = clique.vars
                 new_message_potential = [0,]
                 common_vars = []
-            for i in range(len(new_message_potential)):
-                for j in range((self.states_count ** len(vars_to_marginalize))):
+            for i in range(len(new_message_potential)): 
+                for j in range((self.states_count ** len(vars_to_marginalize))): # K^(M+1) iterations at max including inner loop
                     assignment = dict()
                     for m in range(len(common_vars)):
                         assignment[common_vars[m]] = (i // (self.states_count ** (len(common_vars) - m - 1))) % self.states_count
@@ -303,8 +303,8 @@ class Inference:
         self.backward_messages = list(reversed(self.backward_messages))
         marginals = [[0, ] * self.states_count for _ in range(self.factors_count * self.num_observations)]
         variables_done = set()
-        for i in range(len(self.junction_chain.cliques)):
-            for j in range(len(self.junction_chain.cliques[i].potential)):
+        for i in range(len(self.junction_chain.cliques)): # (T-1)*M + T iterations
+            for j in range(len(self.junction_chain.cliques[i].potential)): # K^(M + 1) iterations
                 assignment = dict()
                 for k in range(len(self.junction_chain.cliques[i].vars)):
                     assignment[self.junction_chain.cliques[i].vars[k]] = (j // (self.states_count ** (len(self.junction_chain.cliques[i].vars) - k - 1))) % self.states_count
@@ -336,7 +336,7 @@ class Inference:
         message = Message(c.vars, [heap,] * (self.states_count ** len(c.vars)), self.states_count)
         curr_heap.add(assignment)
         l = self.junction_chain.cliques
-        for idx, clique in enumerate(l):
+        for idx, clique in enumerate(l): # (T-1)*M + T iterations
             vars_to_marginalize = []
             new_message_potential = []
             common_vars = []
@@ -350,15 +350,15 @@ class Inference:
                 new_message_potential = [0,]
                 common_vars = []
             # print(idx)
-            for i in range(len(new_message_potential)):
+            for i in range(len(new_message_potential)): # K^(M + 1) iterations at max
                 new_message_potential[i] = KHeap(self.k)
-                for j in range((self.states_count ** len(vars_to_marginalize))):
+                for j in range((self.states_count ** len(vars_to_marginalize))): 
                     assignment = dict()
                     for m in range(len(common_vars)):
                         assignment[common_vars[m]] = (i // (self.states_count ** (len(common_vars) - m - 1))) % self.states_count
                     for m in range(len(vars_to_marginalize)):
                         assignment[vars_to_marginalize[m]] = (j // (self.states_count ** (len(vars_to_marginalize) - m - 1))) % self.states_count
-                    for prev_assignment in message.get_potential_from_dict(assignment).get_top_k():
+                    for prev_assignment in message.get_potential_from_dict(assignment).get_top_k(): # K iterations but each is O(log K)
                         new_assignment_dict = assignment.copy()
                         for var in prev_assignment.assignment_dict:
                             new_assignment_dict[var] = prev_assignment.assignment_dict[var]

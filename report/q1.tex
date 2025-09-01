@@ -173,4 +173,15 @@ The message passing algorithm is now simple with just two passes, one from left 
 
 For including the prior of the observations, we merged the observations into the cliques by removing the observation nodes and considering the potentials over the cliques that include the observations.
 
-For finding the z-value of the junction tree, the message passing algorithm runs over every clique for 
+In the junction tree, there are $M(T-1) + T$ cliques of size $M+1$ and all the cliques form a chain. Here, $M$ is the number of factors and $T$ is the number of time steps.
+
+\subsection{Z-Value Computation}
+For finding the z-value of the junction tree, the message passing algorithm runs over every clique for every assignment of the variable in the clique at max and hence the time complexity is $O(TMK^{M+1})$, assuming the translation of dict to the indices occurs in $O(1)$, where $K$ is the number of states each hidden variable can take.
+
+\subsection{Marginals of the Hidden States}
+
+For the marginals of the hidden states, we ran the message passing algorithm forward and backward, and then computed the marginals for each hidden state by marginalizing over the cliques that contain the hidden state. This took $O(TMK^{M+1})$ time.
+
+\subsection{Most Probable Sequences of Hidden States}
+
+For the top-k most probable sequence of hidden states, we modified the message passing algorithm to each potential storing a k-heap of assignments and their probabilities and merging the k-heaps appropriately during message passing. This took $O(TMK^{M+1} k\log k)$ time.
