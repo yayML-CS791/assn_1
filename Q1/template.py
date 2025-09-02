@@ -79,6 +79,9 @@ class Clique:
             index += assignment_dict[self.vars[i]] * (self.num_states ** (len(self.vars) - i - 1))
             if self.vars[i] in self.init_assignment and self.init_assignment[self.vars[i]] != assignment_dict[self.vars[i]]:
                 return 0
+        print(index)
+        print(self.potential)
+        print(self.vars)
         return self.potential[index]
     
     def set_potential_from_assignment(self, assignment, value):
@@ -165,6 +168,7 @@ class Inference:
         self.state_factor_potentials = data['State_Factor_Potentials']
         self.state_factor_potentials_sum = [sum(self.state_factor_potentials[i:i+self.states_count]) for i in range(0, len(self.state_factor_potentials), self.states_count)]
         self.state_factor_potentials = [potential/self.state_factor_potentials_sum[i//self.states_count] for i, potential in enumerate(self.state_factor_potentials)]
+        print(len(self.state_factor_potentials))
         self.k = data['K']
         self.z = None
 
@@ -296,8 +300,6 @@ class Inference:
         Refer to the sample test case for the expected format of the marginals.
         """
         self.pass_messages(self.backward_messages, False)
-        # print(''.join([str(m.potential) + '\n' for m in self.backward_messages]))
-        # print(''.join([str(c) for c in self.junction_chain.cliques]))
         z = self.forward_messages[-1].potential[0]
         # print(z)
         self.backward_messages = list(reversed(self.backward_messages))
@@ -363,7 +365,6 @@ class Inference:
                         for var in prev_assignment.assignment_dict:
                             new_assignment_dict[var] = prev_assignment.assignment_dict[var]
                         new_assignment = Assignment(clique.vars, new_assignment_dict, clique.get_potential_from_dict(assignment) * prev_assignment.potential, self.states_count)
-                        # print('new_assn: ', new_assignment_dict)
                         new_message_potential[i].add(new_assignment)
             message = Message(common_vars, new_message_potential, self.states_count)
             # print(clique.potential)
