@@ -103,9 +103,9 @@ to costs and added to the cumulative cost of reaching the current state. If this
 new path yields a lower cost than any previously recorded path to the next state, 
 the cost is updated along with a backpointer to record the optimal predecessor. 
 \\In the backtracking phase, the algorithm identifies the final state with the 
-minimum cumulative cost (equivalently, the maximum likelihood). Starting from 
-this state, it follows the backpointers in reverse through the trellis, thereby 
-reconstructing the most probable sequence of input bits.
+minimum cost (or the maximum likelihood). Starting from 
+this state, it follows the backpointers in reverse through the trellis and
+reconstructs the most probable sequence of input bits.
 
 The time complexity of the algorithm is $O(T * S)$ where $T$ is the length of the original string or the number of timestamps and $S$ is the total number of states (in this case $2^{k - 1}$) where k is the length of the shift register.
 
