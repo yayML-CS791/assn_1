@@ -91,16 +91,18 @@ The order of message updates does not strictly matter, as long as all beliefs an
 \end{tikzpicture}
 \end{center}
 
-Let the number of states be \texttt{K}, number of states be \texttt{N}, number of factors be \texttt{F} and number of observations be \texttt{M}.
+Let the number of states be \texttt{K}, number of states be \texttt{N}, number of factors be \texttt{M} and number of observations be \texttt{T}.
 
 \begin{itemize}
-    \item The function \texttt{updateFactorNodeBeliefs} has a time complexity of $O(MFK^F)$
-    \item The function \texttt{updateTransitionNodeBeliefs} has a time complexity of $O(MFK^2)$
-    \item The function \texttt{messageToSendFromFactor} has a time complexity of $O(FK^F)$
+    \item The function \texttt{updateFactorNodeBeliefs} has a time complexity of $O(TMK^M)$
+    \item The function \texttt{updateTransitionNodeBeliefs} has a time complexity of $O(TMK^2)$
+    \item The function \texttt{messageToSendFromFactor} has a time complexity of $O(MK^M)$
     \item The function \texttt{messageToSendFromTransition} has a time complexity of $O(K^2)$
-    \item The resulting complexity of function \texttt{sendMessagesToVariables} is $O(MF^2K^F \texttt{+} MFK^2)$
-    \item The function \texttt{updateVariableBeliefs} has a time complexity of $O(MFK)$
-    \item The function \texttt{sendMessagesToFactorsNodes} has a time complexity of $O(MFK)$
-    \item The function \texttt{sendMessagesToTransNodes} has a time complexity of $O(MFK)$
+    \item The resulting complexity of function \texttt{sendMessagesToVariables} is $O(TM^2K^M \texttt{+} TMK^2)$
+    \item The function \texttt{updateVariableBeliefs} has a time complexity of $O(TMK)$
+    \item The function \texttt{sendMessagesToFactorsNodes} has a time complexity of $O(TMK)$
+    \item The function \texttt{sendMessagesToTransNodes} has a time complexity of $O(TMK)$
+    \item Checking convergence has an order of $O(TMK)$
 \end{itemize}
 Therefore, the overall time complexity of the algorithm is $O(MF^2K^F \texttt{+} MFK^2)$ assuming O(1) iterations for convergence. 
+
